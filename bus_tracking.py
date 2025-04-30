@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 import os
 import subprocess
 import threading
+import time
 
 load_dotenv(dotenv_path=".env")
 
@@ -18,9 +19,7 @@ TIMEZONE = pytz.timezone('America/Toronto')
 
 ROUTES = {
     "gym" : {"stop_id": "1168",
-             "route_id": "19",
-             # the valid directions come from the headsigns in the trips.txt file
-             "valid_directions" : ["A-St. Jacobs Market", "B-Northfield Station"]}
+             "route_id": "19"}
 }
 
 active_monitors = {}
@@ -32,7 +31,7 @@ def fetch_gtfs_pb(url):
     )
     return result.stdout
 
-def get_next_arrivals(stop_id, route_id, valid_directions):
+def get_next_arrivals(stop_id, route_id):
     url = "https://webapps.regionofwaterloo.ca/api/grt-routes/api/tripupdates"
     response_content = fetch_gtfs_pb(url)
     feed = gtfs_realtime_pb2.FeedMessage()
@@ -46,26 +45,20 @@ def get_next_arrivals(stop_id, route_id, valid_directions):
             continue
         
         trip = entity.trip_update
-        if trip.trip.route_id != route_id:
+        if str(trip.trip.route_id) != route_id:
             continue
-        
-        if valid_directions:
-            # Check if the trip's headsign is in the valid directions
-            headsign = trip.trip.trip_headsign if trip.trip.HasField("headsign") else None
-            if headsign not in valid_directions:
-                continue
         
         for stop_time in trip.stop_time_update:
             if stop_time.stop_id == stop_id:
                 dep_time = datetime.datetime.fromtimestamp(
-                    stop_time.departure.time, tz=TIMEZONE
+                    stop_time.arrival.time, tz=TIMEZONE
                 )
                 if dep_time > now:
                     arrivals.append(dep_time)
                     
     return sorted(arrivals)
 
-def bus_monitor(context, chat_id, stop_id, route_id, valid_directions):
+def bus_monitor(context, chat_id, stop_id, route_id):
     already_sent = set()
     end_time = datetime.datetime.now(TIMEZONE) + datetime.timedelta(minutes=70)
     
@@ -74,7 +67,7 @@ def bus_monitor(context, chat_id, stop_id, route_id, valid_directions):
         if active_monitors.get(chat_id) is False:
             break
         
-        arrivals = get_next_arrivals(stop_id, route_id, valid_directions)
+        arrivals = get_next_arrivals(stop_id, route_id)
         now = datetime.datetime.now(TIMEZONE)
         for dept_time in arrivals:
             mins = (dept_time - now).total_seconds() / 60
@@ -84,7 +77,10 @@ def bus_monitor(context, chat_id, stop_id, route_id, valid_directions):
                 already_sent.add(rounded)
                 context.bot.send_message(chat_id=chat_id, text=f"Bus {route_id} arriving in around {int(mins)} minutes")
     
-        threading.Event().wait(60)
+        for i in range(60):
+            if active_monitors.get(chat_id) is False:
+                break
+            time.sleep(1)
     
     active_monitors.pop(chat_id, None)
         
@@ -92,6 +88,7 @@ async def route_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(context.args) != 1:
         await update.message.reply_text("Usage: /route [location]")
         return
+    
     location = context.args[0].lower()
     locations = [loc.lower() for loc in ROUTES.keys()]
     locations_str = "\n".join(locations)
@@ -109,9 +106,8 @@ async def route_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     config = ROUTES[location]
     stop_id = config["stop_id"]
     route_id = config["route_id"]
-    valid_directions = config["valid_directions"]
     
-    arrivals = get_next_arrivals(stop_id, route_id, valid_directions)
+    arrivals = get_next_arrivals(stop_id, route_id)
     if not arrivals:
         await update.message.reply_text("No upcoming buses found. No tracker started.")
         return
@@ -125,7 +121,7 @@ async def route_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     thread = threading.Thread(
         target = bus_monitor,
-        args = (context, update.message.chat_id, stop_id, route_id, valid_directions)
+        args = (context, update.message.chat_id, stop_id, route_id)
     )
     thread.start()
     
@@ -148,6 +144,15 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("No active bus tracker found.")
 
+USER_ID = os.getenv("USER_ID")
+
+async def shutdown(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if str(update.message.from_user.id) != USER_ID:
+        await update.message.reply_text("You are not authorized to shut down the bot.")
+        return
+    await update.message.reply_text("Shutting down the bot.")
+    os._exit(0)
+
 async def help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Available commands:\n"
                                       "/route [location] - Start tracking bus arrivals for a location\n"
@@ -162,6 +167,7 @@ def main():
     app.add_handler(CommandHandler("stop", stop_handler))
     app.add_handler(CommandHandler("status", status))
     app.add_handler(CommandHandler("help", help))
+    app.add_handler(CommandHandler("shutdown", shutdown))
     
     # unknown handling
     app.add_handler(MessageHandler(filters.TEXT, unknown))

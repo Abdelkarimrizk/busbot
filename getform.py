@@ -18,4 +18,5 @@ feed = gtfs_realtime_pb2.FeedMessage()
 feed.ParseFromString(response_content)
 
 # Print the entire protobuf message
-print(feed)
+with open("gtfs_feed.txt", "w") as f:
+    f.write(str(feed))
