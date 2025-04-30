@@ -25,6 +25,7 @@ ROUTES = {
 
 active_monitors = {}
 
+# Fetches the gtfs pb from the url(in this case from the grt opendata)
 def fetch_gtfs_pb(url):
     result = subprocess.run(
         ["curl", "-s", "--ciphers", "DEFAULT@SECLEVEL=1", url],
@@ -33,7 +34,9 @@ def fetch_gtfs_pb(url):
     print(f"[DEBUG] Downloaded {len(result.stdout)} bytes from GTFS feed")
     return result.stdout
 
+
 def get_next_arrivals(stop_id, route_id):
+    # Fetches the real time trip updates from the grt opendata
     url = "https://webapps.regionofwaterloo.ca/api/grt-routes/api/tripupdates"
     response_content = fetch_gtfs_pb(url)
     feed = gtfs_realtime_pb2.FeedMessage()
@@ -41,6 +44,9 @@ def get_next_arrivals(stop_id, route_id):
     now = datetime.datetime.now(TIMEZONE)
     arrivals = []
     
+    # Loops through the entities in the feed and checks if they have a trip_update field
+    # If the field exists, it checks the route_id and stop_id
+    # If those match, it gets the arrival time of the bus and adds it to the arrivals array
     for entity in feed.entity:
         if not entity.HasField("trip_update"):
             continue
@@ -59,10 +65,16 @@ def get_next_arrivals(stop_id, route_id):
                     
     return sorted(arrivals)
 
+
 def bus_monitor(context, chat_id, stop_id, route_id, loop):
     already_sent = set()
+    # Stops the while loop after 70 minutes
     end_time = datetime.datetime.now(TIMEZONE) + datetime.timedelta(minutes=70)
     
+    # Continously loops until the end_time is reached or the user stops the tracker
+    # Gets the next arrivals and checks if they are within 9-11 minutes of the current time
+    # If one is, it sends a message to the user then adds the time to already_sent
+    # It sleeps for 1 minute between checks to not fetch too often.
     while datetime.datetime.now(TIMEZONE) < end_time:
         
         if active_monitors.get(chat_id) is False:
@@ -86,8 +98,15 @@ def bus_monitor(context, chat_id, stop_id, route_id, loop):
                 break
             time.sleep(1)
     
+    # Removes the chat_id from active_monitors since the tracker is done
     active_monitors.pop(chat_id, None)
-        
+
+# This function is called when the user sends the /route [location] command
+# It first checks if the user gave a location and if its valid
+# If it is not valid, it sends a message to the user with the available locations
+# If it is valid, it checks if the user already has a tracker running
+# If not, it gets the next arrivals, sends them to the user if they exist
+#   and starts the bus tracker in a new thread
 async def route_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(context.args) != 1:
         await update.message.reply_text("Usage: /route [location]")
@@ -117,7 +136,7 @@ async def route_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     reply = f"Upcoming buses for {location}:\n"
-    for time in arrivals[:3]:
+    for time in arrivals[:7]:
         reply += f"- {time.strftime('%I:%M %p')}\n"
     await update.message.reply_text(reply)
     
@@ -130,7 +149,9 @@ async def route_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     thread.start()
     
-    
+
+# This function is called when the user sends the /stop command
+# It checks if the user has a tracker running and stops it if they do
 async def stop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
     if chat_id in active_monitors:
@@ -139,9 +160,12 @@ async def stop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("No active bus tracker found.")
 
+# This function is called when the user sends an unknown command or message
 async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Unknown command. Use /help for a list of commands.")
-    
+
+# This function is called when the user sends the /status command
+# It checks if there is a tracker running and sends a message to the user
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
     if chat_id in active_monitors:
@@ -151,6 +175,8 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 USER_ID = os.getenv("USER_ID")
 
+# This function is called when the admin(USER_ID) sends the /shutdown command
+# It shuts down the bot, stopping the program
 async def shutdown(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if str(update.message.from_user.id) != USER_ID:
         await update.message.reply_text("You are not authorized to shut down the bot.")
@@ -158,6 +184,8 @@ async def shutdown(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Shutting down the bot.")
     os._exit(0)
 
+# This function is called when the user sends the /help command
+# It sends a message to the user with the available commands
 async def help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Available commands:\n"
                                       "/route [location] - Start tracking bus arrivals for a location\n"
@@ -168,6 +196,9 @@ async def help(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                       "/help - Show this help message\n")
 
 
+# This function is called when the user sends the /testmsg command
+# It sends a message to the user from a background thread
+# This was used to make sure bus_monitor can actually send a message 10 minutes before the bus arrives
 async def testmsg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
     loop = context.bot_data["loop"]
@@ -184,14 +215,16 @@ async def testmsg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     threading.Thread(target=threaded_send).start()
     await update.message.reply_text("Started background thread.")
 
+# This is used when the but is started to create the loop
 async def on_startup(app):
     # This will run once the app is fully initialized and async-safe
     app.bot_data["loop"] = asyncio.get_running_loop()
 
 def main():
+    # Creates the application(bot) and sets the token
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).post_init(on_startup).build()
     
-    # command handling
+    # Command handling
     app.add_handler(CommandHandler("route", route_handler))
     app.add_handler(CommandHandler("stop", stop_handler))
     app.add_handler(CommandHandler("status", status))
@@ -199,7 +232,7 @@ def main():
     app.add_handler(CommandHandler("testmsg", testmsg))
     app.add_handler(CommandHandler("help", help))
     
-    # unknown handling
+    # Unknown handling
     app.add_handler(MessageHandler(filters.TEXT, unknown))
     app.add_handler(MessageHandler(filters.COMMAND, unknown))
     app.run_polling()
