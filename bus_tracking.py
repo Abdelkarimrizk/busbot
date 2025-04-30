@@ -8,6 +8,7 @@ import os
 import subprocess
 import threading
 import time
+import asyncio
 
 load_dotenv(dotenv_path=".env")
 
@@ -23,10 +24,11 @@ ROUTES = {
 }
 
 active_monitors = {}
+loop = asyncio.get_event_loop()
 
 def fetch_gtfs_pb(url):
     result = subprocess.run(
-        ["curl", "-s", url],
+        ["curl", "-s", "--ciphers", "DEFAULT@SECLEVEL=1", url],
         capture_output=True
     )
     print(f"[DEBUG] Downloaded {len(result.stdout)} bytes from GTFS feed")
@@ -58,7 +60,7 @@ def get_next_arrivals(stop_id, route_id):
                     
     return sorted(arrivals)
 
-def bus_monitor(context, chat_id, stop_id, route_id):
+def bus_monitor(context, chat_id, stop_id, route_id, loop):
     already_sent = set()
     end_time = datetime.datetime.now(TIMEZONE) + datetime.timedelta(minutes=70)
     
@@ -75,7 +77,10 @@ def bus_monitor(context, chat_id, stop_id, route_id):
             
             if 9 <= mins <= 11 and rounded not in already_sent:
                 already_sent.add(rounded)
-                context.bot.send_message(chat_id=chat_id, text=f"Bus {route_id} arriving in around {int(mins)} minutes")
+                asyncio.run_coroutine_threadsafe(
+                    context.bot.send_message(chat_id=chat_id, text=f"Bus {route_id} arriving in around {int(mins)} minutes"),
+                    loop
+                )
     
         for i in range(60):
             if active_monitors.get(chat_id) is False:
@@ -121,7 +126,7 @@ async def route_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     thread = threading.Thread(
         target = bus_monitor,
-        args = (context, update.message.chat_id, stop_id, route_id)
+        args = (context, update.message.chat_id, stop_id, route_id, loop)
     )
     thread.start()
     
@@ -160,14 +165,15 @@ async def help(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                       "/help - Show this help message\n"
                                       "/status - Check if a bus tracker is active\n")
 
+
 def main():
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
     # command handling
     app.add_handler(CommandHandler("route", route_handler))
     app.add_handler(CommandHandler("stop", stop_handler))
     app.add_handler(CommandHandler("status", status))
-    app.add_handler(CommandHandler("help", help))
     app.add_handler(CommandHandler("shutdown", shutdown))
+    app.add_handler(CommandHandler("help", help))
     
     # unknown handling
     app.add_handler(MessageHandler(filters.TEXT, unknown))
