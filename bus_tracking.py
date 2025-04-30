@@ -29,6 +29,7 @@ def fetch_gtfs_pb(url):
         ["curl", "-s", url],
         capture_output=True
     )
+    print(f"[DEBUG] Downloaded {len(result.stdout)} bytes from GTFS feed")
     return result.stdout
 
 def get_next_arrivals(stop_id, route_id):
