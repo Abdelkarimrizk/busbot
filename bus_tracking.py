@@ -25,12 +25,20 @@ ROUTES = {
 active_monitors = {}
 
 def fetch_gtfs_pb(url):
-    result = subprocess.run(
-        ["curl", "-s", url],
-        capture_output=True
-    )
-    print(f"[DEBUG] Downloaded {len(result.stdout)} bytes from GTFS feed")
-    return result.stdout
+    try:
+        result = subprocess.run(
+        ["curl", "--ciphers", "DEFAULT@SECLEVEL=1", "-s", url],
+        capture_output=True,
+        timeout=10
+        )
+        if result.returncode != 0:
+            print(f"Failed to fetch GTFS feed: {result.stderr.decode()}")
+            return ""
+        print(f"Downloaded {len(result.stdout)} bytes from GTFS feed")
+        return result.stdout
+    except Exception as e:
+        print(f"Exception occurred while fetching GTFS feed: {e}")
+        return ""
 
 def get_next_arrivals(stop_id, route_id):
     url = "https://webapps.regionofwaterloo.ca/api/grt-routes/api/tripupdates"
