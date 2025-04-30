@@ -77,7 +77,7 @@ def bus_monitor(context, chat_id, stop_id, route_id, loop):
             if 9 <= mins <= 11 and rounded not in already_sent:
                 already_sent.add(rounded)
                 asyncio.run_coroutine_threadsafe(
-                    context.bot.send_message(chat_id=chat_id, text=f"Bus {route_id} arriving in around {int(mins)} minutes"),
+                    context.bot.send_message(chat_id=chat_id, text=f"Bus {route_id} arriving in around {int(mins)} minutes, at {dept_time.strftime('%I:%M %p')}."),
                     loop
                 )
     
@@ -99,7 +99,7 @@ async def route_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if location not in ROUTES:
         await update.message.reply_text("Location not found.\n")
         await update.message.reply_text("Available locations:\n"
-                                        f"{locations_str}\n")
+                                        f"- {locations_str}\n")
         return
     
     chat_id = update.message.chat_id
