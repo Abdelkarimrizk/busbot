@@ -36,7 +36,7 @@ def get_next_arrivals(stop_id, route_id):
     response_content = fetch_gtfs_pb(url)
     feed = gtfs_realtime_pb2.FeedMessage()
     feed.ParseFromString(response_content)
-    
+    print(feed)
     now = datetime.datetime.now(TIMEZONE)
     arrivals = []
     
@@ -85,7 +85,6 @@ def bus_monitor(context, chat_id, stop_id, route_id):
     active_monitors.pop(chat_id, None)
         
 async def route_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print("/route handler triggered")
     if len(context.args) != 1:
         await update.message.reply_text("Usage: /route [location]")
         return
