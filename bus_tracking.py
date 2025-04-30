@@ -85,6 +85,7 @@ def bus_monitor(context, chat_id, stop_id, route_id):
     active_monitors.pop(chat_id, None)
         
 async def route_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    print("/route handler triggered")
     if len(context.args) != 1:
         await update.message.reply_text("Usage: /route [location]")
         return
