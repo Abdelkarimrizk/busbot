@@ -24,7 +24,6 @@ ROUTES = {
 }
 
 active_monitors = {}
-loop = asyncio.get_event_loop()
 
 def fetch_gtfs_pb(url):
     result = subprocess.run(
@@ -124,6 +123,7 @@ async def route_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     active_monitors[chat_id] = True
     
+    loop = context.bot_data["loop"]
     thread = threading.Thread(
         target = bus_monitor,
         args = (context, update.message.chat_id, stop_id, route_id, loop)
@@ -168,6 +168,10 @@ async def help(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
+    
+    loop = asyncio.get_event_loop()
+    
+    app.bot_data["loop"] = loop
     # command handling
     app.add_handler(CommandHandler("route", route_handler))
     app.add_handler(CommandHandler("stop", stop_handler))
