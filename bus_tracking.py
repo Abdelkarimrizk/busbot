@@ -166,17 +166,35 @@ async def help(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                       "/status - Check if a bus tracker is active\n")
 
 
+async def testmsg(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.message.chat_id
+    loop = context.bot_data["loop"]
+
+    def threaded_send():
+        asyncio.run_coroutine_threadsafe(
+            context.bot.send_message(
+                chat_id=chat_id,
+                text="This message was sent from a background thread."
+            ),
+            loop
+        )
+
+    threading.Thread(target=threaded_send).start()
+    await update.message.reply_text("Started background thread.")
+
+async def on_startup(app):
+    # This will run once the app is fully initialized and async-safe
+    app.bot_data["loop"] = asyncio.get_running_loop()
+
 def main():
-    app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
+    app = ApplicationBuilder().token(TELEGRAM_TOKEN).post_init(on_startup).build()
     
-    loop = asyncio.get_event_loop()
-    
-    app.bot_data["loop"] = loop
     # command handling
     app.add_handler(CommandHandler("route", route_handler))
     app.add_handler(CommandHandler("stop", stop_handler))
     app.add_handler(CommandHandler("status", status))
     app.add_handler(CommandHandler("shutdown", shutdown))
+    app.add_handler(CommandHandler("testmsg", testmsg))
     app.add_handler(CommandHandler("help", help))
     
     # unknown handling
