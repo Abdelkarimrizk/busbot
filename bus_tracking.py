@@ -66,7 +66,7 @@ def get_next_arrivals(stop_id, route_id):
     return sorted(arrivals)
 
 
-def bus_monitor(context, chat_id, stop_id, route_id, loop):
+def bus_monitor(context, chat_id, stop_id, route_id, loop, location):
     already_sent = set()
     # Stops the while loop after 70 minutes
     end_time = datetime.datetime.now(TIMEZONE) + datetime.timedelta(minutes=70)
@@ -77,7 +77,7 @@ def bus_monitor(context, chat_id, stop_id, route_id, loop):
     # It sleeps for 1 minute between checks to not fetch too often.
     while datetime.datetime.now(TIMEZONE) < end_time:
         
-        if active_monitors.get(chat_id) is False:
+        if active_monitors.get((chat_id, location)) is False:
             break
         
         arrivals = get_next_arrivals(stop_id, route_id)
@@ -94,12 +94,12 @@ def bus_monitor(context, chat_id, stop_id, route_id, loop):
                 )
     
         for i in range(60):
-            if active_monitors.get(chat_id) is False:
+            if active_monitors.get((chat_id, location)) is False:
                 break
             time.sleep(1)
     
     # Removes the chat_id from active_monitors since the tracker is done
-    active_monitors.pop(chat_id, None)
+    active_monitors.pop((chat_id, location), None)
 
 # This function is called when the user sends the /route [location] command
 # It first checks if the user gave a location and if its valid
@@ -122,7 +122,7 @@ async def route_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     chat_id = update.message.chat_id
-    if active_monitors.get(chat_id) is True:
+    if active_monitors.get((chat_id, location)) is True:
         await update.message.reply_text(f"You already have a {location} tracker running. Use /stop to stop it.")
         return
     
@@ -140,25 +140,31 @@ async def route_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply += f"- {time.strftime('%I:%M %p')}\n"
     await update.message.reply_text(reply)
     
-    active_monitors[chat_id] = True
+    active_monitors[(chat_id, location)] = True
     
     loop = context.bot_data["loop"]
     thread = threading.Thread(
         target = bus_monitor,
-        args = (context, update.message.chat_id, stop_id, route_id, loop)
+        args = (context, update.message.chat_id, stop_id, route_id, loop, location)
     )
     thread.start()
     
 
-# This function is called when the user sends the /stop command
+# This function is called when the user sends the /stop [location] command
 # It checks if the user has a tracker running and stops it if they do
 async def stop_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
-    if chat_id in active_monitors:
-        active_monitors[chat_id] = False
-        await update.message.reply_text("Bus tracker stopped.")
+    
+    if not context.args:
+        await update.message.reply_text("Usage: /stop [location]")
+        return
+    
+    location = context.args[0].lower()
+    if (chat_id, location) in active_monitors:
+        active_monitors[(chat_id, location)] = False
+        await update.message.reply_text(f"Bus tracker for {location} stopped.")
     else:
-        await update.message.reply_text("No active bus tracker found.")
+        await update.message.reply_text(f"No bus tracker for {location} found.")
 
 # This function is called when the user sends an unknown command or message
 async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -168,10 +174,12 @@ async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # It checks if there is a tracker running and sends a message to the user
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
-    if chat_id in active_monitors:
-        await update.message.reply_text("Bus tracker is active.")
+    locations = [loc for (cid, loc), active in active_monitors.items() if active and cid == chat_id]
+    if locations:
+        locations_str = "\n".join(locations)
+        await update.message.reply_text(f"Active bus trackers:\n{locations_str}")
     else:
-        await update.message.reply_text("No active bus tracker found.")
+        await update.message.reply_text("No active bus trackers found.")
 
 USER_ID = os.getenv("USER_ID")
 
