@@ -153,11 +153,4 @@ Once the bot is running, you can use the following commands to interact with it:
 - /testmsg: Tests sending a message from a background thread
 - /help: Sends a message similar to this list
 
-_For more examples, please refer to the [Documentation](https://example.com)_
-
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-
-
-
-
