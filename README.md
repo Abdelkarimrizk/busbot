@@ -39,7 +39,7 @@ This was made with the intention of running on a cloud server (Hetzner), but it 
 <!-- GETTING STARTED -->
 ## Getting Started
 
-These instructions will help you set up the project locally. Follow these steps to run the bot on your machine.
+These instructions will help you set up the project locally.
 
 ### Prerequisites
 
