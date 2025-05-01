@@ -196,10 +196,10 @@ async def shutdown(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # It sends a message to the user with the available commands
 async def help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Available commands:\n"
-                                      "/route [location] - Start tracking bus arrivals for a location\n"
-                                      "/stop - Stop tracking bus arrivals\n"
-                                      "/status - Check if a bus tracker is active\n"
-                                      "/shutdown - Shut the bot down (admin only)\n"
+                                      "/route [location] - Start tracking bus arrivals for the given location\n"
+                                      "/stop [location] - Stop tracking bus arrivals for the given location\n"
+                                      "/status - View all active bus trackers\n"
+                                      "/shutdown - Shuts the bot down (admin only)\n"
                                       "/testmsg - Test sending a message from a background thread\n"
                                       "/help - Show this help message\n")
 
