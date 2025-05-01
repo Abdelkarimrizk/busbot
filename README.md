@@ -23,7 +23,7 @@
 <!-- ABOUT THE PROJECT -->
 ## About The Project
 
-This Telegram bot tracks bus arrivals for specific routes using the Waterloo Region Transit (GRT) GTFS reel time feed. It returns the bus schedule for a given stop and trip, and it sends notifications when buses are about to arrive.
+This is a Telegram bot that tracks bus arrivals for specific routes using the Waterloo Region Transit (GRT) GTFS real time feed. It returns the bus schedule for a given stop and trip, and it sends notifications when buses are about to arrive.
 
 This was made with the intention of running on a cloud server (Hetzner), but it can also be deployed locally on any server.
 
