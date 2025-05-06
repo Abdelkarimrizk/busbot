@@ -215,10 +215,9 @@ async def testmsg(update: Update, context: ContextTypes.DEFAULT_TYPE):
         asyncio.run_coroutine_threadsafe(
             context.bot.send_message(
                 chat_id=chat_id,
-                text="This message was sent from a background thread."
-            ),
-            loop
-        )
+                text="This message was sent from a background thread."),
+                loop
+            )
 
     threading.Thread(target=threaded_send).start()
     await update.message.reply_text("Started background thread.")
